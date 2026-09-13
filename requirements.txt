@@ -1,0 +1,15 @@
+# core — retrieval, hooks, sleep cycle
+fastembed>=0.3          # BAAI/bge-small-en-v1.5 embeddings (pulls onnxruntime)
+
+# optional — cross-encoder reranker (rerank_enabled flag). CPU is fine for
+# cross-encoder/ms-marco-MiniLM-L-6-v2; torch is a large download.
+# sentence-transformers>=2.7
+# torch
+
+# optional — LLM synthesis passes via the Anthropic API. Without it the engine
+# falls back to `claude -p` (your Claude Code subscription) or a local
+# llama.cpp server for the consolidate / importance / genesis passes.
+# anthropic>=0.40
+
+# dev
+pytest>=8

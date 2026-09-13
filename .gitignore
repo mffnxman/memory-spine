@@ -1,0 +1,17 @@
+# private state — never commit
+kg_seeds.json
+_meta/
+!examples/memory/_meta/
+examples/memory/_meta/*
+!examples/memory/_meta/feature_flags.json
+!examples/memory/_meta/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.log
+.env
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/

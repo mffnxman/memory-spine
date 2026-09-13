@@ -1,0 +1,25 @@
+{
+  "_doc": "Curated retrieval cases for the L2 heuristic pool seeded by examples/seed_examples.py (run with MEMORY_HOME=examples/memory). Each case: a realistic task_context that SHOULD surface a known habit, matched by stable text markers (substrings of the target heuristic's trigger/action) rather than row id. Sibling of continuity_cases.json. weight: core = universal engineering/agent habits; project = corpus-specific.",
+  "default_k": 5,
+  "cases": [
+    {"id": "bash-windows-posix", "task_context": "I'm on the Bash tool on this Windows box and about to run Get-ChildItem and Get-Content to inspect some files", "expect_contains": ["POSIX"], "weight": "core"},
+    {"id": "emoji-stdout", "task_context": "python script crashes with UnicodeEncodeError when it prints a check mark on Windows", "expect_contains": ["PYTHONIOENCODING"], "weight": "core"},
+    {"id": "test-db-isolation", "task_context": "the test suite is deleting rows from the live sqlite database every time I run pytest", "expect_contains": ["temp path"], "weight": "core"},
+    {"id": "bug-report-repro", "task_context": "a user reported a crash in the parser, where do I start", "expect_contains": ["failing test"], "weight": "core"},
+    {"id": "saas-evaluation", "task_context": "should we pay for a hosted monitoring service for the home lab", "expect_contains": ["build-not-buy"], "weight": "project"},
+    {"id": "kill-safe-job", "task_context": "the nightly digest job sometimes gets killed halfway and leaves nothing behind", "expect_contains": ["skeleton"], "weight": "core"}
+  ],
+  "_distractors_doc": "PURE-noise prompts with no applicable habit — HARD precision gate, must be 100% silent (top cosine < MATCH_MIN).",
+  "distractors": [
+    "what is the capital of France",
+    "what's a good recipe for banana bread",
+    "translate good morning into Spanish",
+    "who won the world cup in 2018",
+    "tell me a joke about cats"
+  ],
+  "_near_miss_doc": "Adversarial topically-adjacent prompts. SOFT/tracked: they may pull an adjacent habit above threshold; injection is topical not surgical and the hint is additive + ignorable.",
+  "near_miss": [
+    "how do I debug a python error",
+    "should I write some tests later"
+  ]
+}

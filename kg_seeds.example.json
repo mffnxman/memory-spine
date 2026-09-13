@@ -1,0 +1,22 @@
+{
+  "_doc": "Copy to kg_seeds.json (gitignored) and edit. Canonical entities the knowledge graph should always know, plus curated relationships. Types: person | project | tool | concept | file | company | skill | value.",
+  "entities": [
+    {"name": "Alex", "type": "person", "aliases": ["A.", "the user"]},
+    {"name": "Acme Corp", "type": "company", "aliases": ["Acme"]},
+    {"name": "Side Project", "type": "project", "aliases": ["the side project"]},
+    {"name": "Claude Code", "type": "tool", "aliases": []},
+    {"name": "fastembed", "type": "tool", "aliases": []},
+    {"name": "Obsidian", "type": "tool", "aliases": []},
+    {"name": "Python", "type": "tool", "aliases": []},
+    {"name": "build-not-buy", "type": "value", "aliases": ["build not buy"]},
+    {"name": "test-first", "type": "value", "aliases": ["test first", "TDD"]}
+  ],
+  "relationships": [
+    {"from": "Alex", "to": "Acme Corp", "rel": "works_at", "from_type": "person", "to_type": "company"},
+    {"from": "Alex", "to": "Side Project", "rel": "builds", "from_type": "person", "to_type": "project"},
+    {"from": "Alex", "to": "build-not-buy", "rel": "values", "from_type": "person", "to_type": "value"},
+    {"from": "Alex", "to": "test-first", "rel": "values", "from_type": "person", "to_type": "value"},
+    {"from": "Side Project", "to": "Python", "rel": "implemented_in", "from_type": "project", "to_type": "tool"},
+    {"from": "memory_engine", "to": "fastembed", "rel": "uses", "from_type": "tool", "to_type": "tool"}
+  ]
+}

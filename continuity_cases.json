@@ -1,0 +1,16 @@
+{
+  "_doc": "Curated query→expected-memory pairs against the synthetic starter corpus in examples/memory (run with MEMORY_HOME=examples/memory after examples/seed_examples.py). Pass = any of `expected` appears in top `top_k` hybrid results. `top_k` defaults to 3. `weight`: core = must-pass spine, project = softer.",
+  "default_top_k": 3,
+  "cases": [
+    {"id": "build_not_buy", "query": "should we buy this SaaS tool or build it ourselves?", "expected": ["feedback_build_not_buy.md"], "weight": "core"},
+    {"id": "review_style", "query": "how does Alex want code reviews handled, should I list every nitpick", "expected": ["feedback_no_flattery.md"], "weight": "core"},
+    {"id": "windows_bash", "query": "running PowerShell cmdlets in the Bash tool on the Windows laptop", "expected": ["feedback_windows_shell.md"], "weight": "core"},
+    {"id": "bug_first_step", "query": "a bug report just came in, what is the first step", "expected": ["procedural_test_first.md"], "weight": "core"},
+    {"id": "who_is_alex", "query": "who is Alex and how do they like to communicate", "expected": ["user_profile.md"], "weight": "core"},
+    {"id": "nas_backup", "query": "how is the NAS backed up and how many generations are kept", "expected": ["project_homelab_backup.md"], "weight": "project"},
+    {"id": "recipe_bot_status", "query": "what is the status of the telegram recipe bot and why is it paused", "expected": ["project_recipe_bot.md"], "weight": "project"},
+    {"id": "git_conventions", "query": "commit message format and branch naming rules", "expected": ["reference_git_conventions.md"], "weight": "project"},
+    {"id": "sqlite_vs_postgres", "query": "did we decide on sqlite or postgres for the bot", "expected": ["decisions.md", "project_recipe_bot.md"], "weight": "core"},
+    {"id": "flow_refactors", "query": "what operates like flow during long refactors", "expected": ["self_flow_on_refactors.md"], "weight": "core"}
+  ]
+}

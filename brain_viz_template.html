@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude — Memory Brain</title>
+<style>
+  :root {
+    --ink: #e2e8f0; --ink-2: #94a3b8; --ink-3: #64748b;
+    --fresh: #16a34a; --aging: #d97706; --stale: #dc2626; --accent: #0891b2;
+    --glass: rgba(255,255,255,.045); --glass-line: rgba(148,163,184,.18);
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(120% 90% at 42% 38%, #0b1230 0%, #070c20 45%, #04060f 100%);
+    color: var(--ink); font-family: var(--mono); overflow: hidden;
+  }
+  canvas { position: absolute; inset: 0; display: block; cursor: crosshair; }
+
+  header {
+    position: fixed; top: 14px; left: 20px; right: 20px; z-index: 5;
+    display: flex; justify-content: space-between; align-items: baseline;
+    pointer-events: none; text-shadow: 0 2px 12px rgba(0,0,0,.8);
+  }
+  header h1 { font-size: 13px; font-weight: 600; letter-spacing: .22em; }
+  header h1 span { color: var(--ink-3); font-weight: 400; }
+  header .meta { font-size: 10px; color: var(--ink-2); text-align: right; line-height: 1.7; }
+
+  .chip {
+    position: absolute; z-index: 4; transform: translateX(-50%);
+    background: var(--glass); border: 1px solid var(--glass-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-radius: 9px; padding: 6px 9px; font-size: 9.5px; line-height: 1.55;
+    cursor: pointer; user-select: none; white-space: nowrap;
+    transition: border-color .15s, background .15s;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { border-color: var(--accent); background: rgba(8,145,178,.12); }
+  .chip b { font-size: 10.5px; letter-spacing: .12em; color: var(--ink); }
+  .chip .n { color: var(--ink-2); }
+  .chip .fn { color: var(--stale); }
+
+  #tooltip {
+    position: fixed; z-index: 10; display: none; max-width: 380px;
+    background: rgba(7,12,32,.92); border: 1px solid var(--glass-line);
+    backdrop-filter: blur(12px); border-radius: 10px; padding: 10px 12px;
+    font-size: 10.5px; line-height: 1.65; pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  }
+  #tooltip.pinned { pointer-events: auto; border-color: var(--accent); }
+  #tooltip .t-label { color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+  #tooltip .t-sub { color: var(--accent); }
+  #tooltip .t-row { color: var(--ink-2); }
+  #tooltip .t-path { color: var(--ink-3); font-size: 9px; word-break: break-all; }
+  #tooltip .bin { padding: 0 5px; border-radius: 4px; color: #04060f; font-weight: 600; }
+
+  footer {
+    position: fixed; bottom: 12px; left: 20px; right: 20px; z-index: 5;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: 9.5px; color: var(--ink-2); pointer-events: none;
+    text-shadow: 0 2px 10px rgba(0,0,0,.8); gap: 24px;
+  }
+  footer .legend { display: flex; gap: 14px; align-items: center; pointer-events: auto; flex-wrap: wrap; }
+  footer .legend > span { white-space: nowrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  footer .note { text-align: right; color: var(--ink-3); line-height: 1.6; max-width: 46ch; }
+
+  #firebtn {
+    position: fixed; bottom: 38px; left: 20px; z-index: 8; font-size: 10px;
+    cursor: pointer; color: var(--ink-2); user-select: none;
+    background: var(--glass); border: 1px solid var(--glass-line); border-radius: 8px;
+    padding: 4px 10px; backdrop-filter: blur(10px);
+  }
+  #firebtn.off { color: var(--ink-3); }
+  #firebtn:hover { border-color: var(--accent); }
+
+  #tablebox { position: fixed; bottom: 38px; left: 128px; z-index: 8; font-size: 10px; }
+  #tablebox .panel { position: absolute; bottom: 30px; left: 0; }
+  #tablebox summary {
+    cursor: pointer; color: var(--ink-2); list-style: none;
+    background: var(--glass); border: 1px solid var(--glass-line); border-radius: 8px;
+    padding: 4px 10px; backdrop-filter: blur(10px);
+  }
+  #tablebox[open] summary { color: var(--accent); border-color: var(--accent); }
+  #tablebox .panel {
+    margin-top: 8px; background: rgba(7,12,32,.94); border: 1px solid var(--glass-line);
+    border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(12px);
+    max-height: 70vh; overflow: auto;
+  }
+  #tablebox table { border-collapse: collapse; }
+  #tablebox th, #tablebox td { padding: 3px 10px; text-align: left; color: var(--ink-2); }
+  #tablebox th { color: var(--ink); border-bottom: 1px solid var(--glass-line); }
+  #tablebox td:last-child, #tablebox th:last-child { text-align: right; }
+</style>
+</head>
+<body data-palette="#16a34a,#d97706,#dc2626,#0891b2">
+
+<header>
+  <h1>MEMORY BRAIN <span>— the homemade engine as a feedforward net</span></h1>
+  <div class="meta" id="hdrmeta"></div>
+</header>
+
+<canvas id="net"></canvas>
+<div id="chips"></div>
+<div id="tooltip"></div>
+
+<details id="tablebox">
+  <summary>data table</summary>
+  <div class="panel" id="tablepanel"></div>
+</details>
+<div id="firebtn" title="toggle neuron firing">&#9889; firing: on</div>
+
+<footer>
+  <div class="legend">
+    <span><span class="dot" style="background:#16a34a"></span>fresh &le; 21d</span>
+    <span><span class="dot" style="background:#d97706"></span>aging 22–45d</span>
+    <span><span class="dot" style="background:#dc2626"></span>stale &gt; 45d</span>
+    <span style="color:var(--ink-3)">edge color = source freshness · faint weave = layer adjacency · bright strands = real synapses · click a chip to isolate · click a neuron to pin</span>
+  </div>
+  <div class="note" id="ftnote"></div>
+</footer>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const COLORS = { fresh: [22,163,74], aging: [217,119,6], stale: [220,38,38] };
+const KIND_STYLE = {
+  observe:  { a: 0.060, w: 0.5, halo: 0.30 },
+  capture:  { a: 0.075, w: 0.6, halo: 0.30 },
+  temporal: { a: 0.040, w: 0.5, halo: 0.30 },
+  cluster:  { a: 0.10,  w: 0.7 },
+  curate:   { a: 0.12,  w: 0.8 },
+  recall:   { a: 0.045, w: 0.6, halo: 0.25 },
+  promote:  { a: 0.20,  w: 0.9 },
+  related:  { a: 0.18,  w: 0.9 },
+  hebbian:  { a: 0.06,  w: 0.7, halo: 0.3 },
+  narrate:  { a: 0.13,  w: 0.8 },
+  mirror:   { a: 0.16,  w: 0.9 },
+  chain:    { a: 0.50,  w: 1.3 },
+  boot:     { a: 0.18,  w: 0.9 },
+};
+const MESH_ALPHA = 0.008, MESH_BUDGET = 12000;
+// firing defaults ON (the user's explicit ask) — the ⚡ toggle turns it off.
+// prefers-reduced-motion no longer silently kills the animation.
+let firing = true;
+const MAX_PULSES = 60;
+// The Obsidian plugin mounts this page in an iframe pane — smaller canvas,
+// shorter pixel travel, so equal speed READS slower there. Vault gets +10%
+// (user-tuned 2026-07-09); the standalone browser copy stays at 1.0.
+const SPEED_MULT = window.self !== window.top ? 1.1 : 1.0;
+// pulses ride the bright REAL synapses preferentially — that's the signal flow
+const KIND_FIRE_WEIGHT = {
+  recall: 6, related: 5, hebbian: 5, promote: 4, curate: 4,
+  boot: 3, chain: 3, mirror: 3, narrate: 2, cluster: 2,
+  capture: 1, observe: 1, temporal: 1,
+};
+
+const canvas = document.getElementById("net");
+const ctx = canvas.getContext("2d");
+let W, H, dpr, base = null, pos = [], isolated = null, pinnedId = null;
+
+function bin(age) { return age <= 21 ? "fresh" : age <= 45 ? "aging" : "stale"; }
+function rgba(name, a) { const c = COLORS[name]; return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+
+const degree = new Array(DATA.nodes.length).fill(0);
+DATA.edges.forEach(e => { degree[e.a]++; degree[e.b]++; });
+const byLayer = DATA.layers.map(() => []);
+DATA.nodes.forEach(n => byLayer[n.layer].push(n.id));
+
+function layout() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+
+  const left = 110, right = W - 130, top = 150, bottom = H - 64;
+  const plotH = bottom - top;
+  pos = new Array(DATA.nodes.length);
+
+  DATA.layers.forEach((L, li) => {
+    const ids = byLayer[li];
+    const x = left + (right - left) * (li / (DATA.layers.length - 1));
+    L.x = x;
+    const n = ids.length;
+    let spacing = n > 1 ? plotH / (n - 1) : 0;
+    if (n < 150) spacing = Math.min(spacing, n > 40 ? 11 : 26);
+    const total = spacing * (n - 1);
+    const y0 = top + (plotH - total) / 2;
+    ids.forEach((id, i) => { pos[id] = { x, y: y0 + i * spacing }; });
+  });
+  renderBase();
+  placeChips();
+}
+
+function edgePath(g, a, b) {
+  g.moveTo(a.x, a.y);
+  if (Math.abs(a.x - b.x) < 1) {
+    // same-column edge (digest chain, sibling links): arc out to the right
+    g.quadraticCurveTo(a.x + 26 + Math.abs(a.y - b.y) * 0.25, (a.y + b.y) / 2, b.x, b.y);
+    return;
+  }
+  const cy = H / 2;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const bow = (my - cy) * 0.38;
+  g.quadraticCurveTo(mx, my + bow, b.x, b.y);
+}
+
+// deterministic PRNG so the mesh is stable across renders
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function drawMesh(g) {
+  // the adjacency weave: every neighboring layer pair gets wired like an MLP.
+  // full mesh when it fits the budget, seeded sample for the mega pairs.
+  const rand = mulberry32(1337);
+  let drawn = 0;
+  for (let li = 0; li < DATA.layers.length - 1; li++) {
+    const A = byLayer[li], B = byLayer[li + 1];
+    if (!A.length || !B.length) continue;
+    const dimmed = isolated !== null && li !== isolated && li + 1 !== isolated;
+    const alpha = MESH_ALPHA * (dimmed ? 0.15 : 1);
+    const full = A.length * B.length <= MESH_BUDGET;
+    const perSource = full ? B.length : Math.max(1, Math.round(MESH_BUDGET / A.length));
+    for (const aId of A) {
+      const a = pos[aId], col = bin(DATA.nodes[aId].age);
+      g.strokeStyle = rgba(col, alpha);
+      g.lineWidth = 0.5;
+      g.beginPath();
+      for (let j = 0; j < perSource; j++) {
+        const bId = full ? B[j] : B[(rand() * B.length) | 0];
+        edgePath(g, a, pos[bId]);
+        drawn++;
+      }
+      g.stroke();
+    }
+  }
+  return drawn;
+}
+
+let meshCount = 0;
+function renderBase() {
+  const off = document.createElement("canvas");
+  off.width = canvas.width; off.height = canvas.height;
+  const g = off.getContext("2d");
+  g.scale(dpr, dpr);
+  g.globalCompositeOperation = "lighter";
+  g.lineCap = "round";
+
+  meshCount = drawMesh(g);
+
+  for (const e of DATA.edges) {
+    const a = pos[e.a], b = pos[e.b];
+    const src = DATA.nodes[e.a];
+    const st = KIND_STYLE[e.k] || KIND_STYLE.curate;
+    let alpha = st.a;
+    if (isolated !== null &&
+        DATA.nodes[e.a].layer !== isolated && DATA.nodes[e.b].layer !== isolated) {
+      alpha *= 0.07;
+    }
+    const col = bin(src.age);
+    // halo pass then core pass — additive stacking builds the bloom
+    g.strokeStyle = rgba(col, alpha * (st.halo ?? 0.55));
+    g.lineWidth = st.w * 3.2;
+    g.beginPath(); edgePath(g, a, b); g.stroke();
+    g.strokeStyle = rgba(col, alpha);
+    g.lineWidth = st.w;
+    g.beginPath(); edgePath(g, a, b); g.stroke();
+  }
+
+  // neurons — packed columns get small dim dots so they glow instead of painting a bar
+  const dense = DATA.layers.map((L, li) => byLayer[li].length > 150);
+  for (const n of DATA.nodes) {
+    const p = pos[n.id];
+    const dim = isolated !== null && n.layer !== isolated;
+    const d = dense[n.layer];
+    g.fillStyle = `rgba(203,213,225,${dim ? 0.1 : d ? 0.16 : 0.5})`;
+    g.beginPath(); g.arc(p.x, p.y, d ? 1.5 : 2.6, 0, 7); g.fill();
+    g.fillStyle = `rgba(248,250,252,${dim ? 0.2 : d ? 0.4 : 0.95})`;
+    g.beginPath(); g.arc(p.x, p.y, d ? 0.6 : 1.15, 0, 7); g.fill();
+  }
+
+  // month markers beside the input column
+  g.globalCompositeOperation = "source-over";
+  g.font = "9px ui-monospace, Consolas, monospace";
+  g.textAlign = "right";
+  let lastMonth = "";
+  for (const id of byLayer[0]) {
+    const n = DATA.nodes[id];
+    const m = n.date.slice(0, 7);
+    if (m !== lastMonth) {
+      lastMonth = m;
+      const p = pos[id];
+      g.fillStyle = "rgba(100,116,139,.9)";
+      g.fillText(monthName(m) + " —", p.x - 12, p.y + 3);
+    }
+  }
+  base = off;
+  document.getElementById("hdrmeta").innerHTML =
+    `${DATA.nodes.length.toLocaleString()} neurons · ${DATA.edges.length.toLocaleString()} real synapses · ` +
+    `${meshCount.toLocaleString()} mesh strands<br>generated ${DATA.generated}`;
+  draw(0);
+}
+
+function monthName(ym) {
+  const names = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  return names[+ym.slice(5) - 1] + " '" + ym.slice(2, 4);
+}
+
+// ---- pulses ---------------------------------------------------------------
+const pulses = [], flashes = [];
+const firePool = [];
+(function buildFirePool() {
+  for (const e of DATA.edges) {
+    const w = KIND_FIRE_WEIGHT[e.k] || 1;
+    for (let i = 0; i < w; i++) firePool.push(e);
+  }
+})();
+
+function spawnPulse() {
+  const e = firePool[(Math.random() * firePool.length) | 0];
+  if (isolated !== null &&
+      DATA.nodes[e.a].layer !== isolated && DATA.nodes[e.b].layer !== isolated) return;
+  // speed is t-units PER SECOND (time-based, not per-frame — a 144Hz panel
+  // must not fire 2.4x faster than a 60Hz one). 0.26-0.74/s = 1.3-3.8s per edge
+  // (user-tuned 2026-07-09: +20% over first time-based cut).
+  pulses.push({ e, t: 0, speed: (0.26 + Math.random() * 0.48) * SPEED_MULT });
+}
+
+function qpoint(a, b, t) {
+  let mx, cpy;
+  if (Math.abs(a.x - b.x) < 1) {
+    mx = a.x + 26 + Math.abs(a.y - b.y) * 0.25;
+    cpy = (a.y + b.y) / 2;
+  } else {
+    const cy = H / 2, my = (a.y + b.y) / 2;
+    mx = (a.x + b.x) / 2;
+    cpy = my + (my - cy) * 0.38;
+  }
+  const u = 1 - t;
+  return {
+    x: u * u * a.x + 2 * u * t * mx + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * cpy + t * t * b.y,
+  };
+}
+
+let lastFrameTs = 0, spawnAcc = 0;
+function draw(ts) {
+  // real elapsed time — animation speed is refresh-rate independent
+  const dt = lastFrameTs ? Math.min(0.05, (ts - lastFrameTs) / 1000) : 0.016;
+  lastFrameTs = ts;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(base, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  if (firing) {
+    ctx.globalCompositeOperation = "lighter";
+    spawnAcc += 19 * dt; // ~19 new pulses per second, any refresh rate
+    while (spawnAcc >= 1) {
+      spawnAcc -= 1;
+      if (pulses.length < MAX_PULSES) spawnPulse();
+    }
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.t += p.speed * dt;
+      if (p.t >= 1) {
+        // neuron fires on arrival — expanding ring flash at the target
+        const tp = pos[p.e.b];
+        flashes.push({ x: tp.x, y: tp.y, t: 0 });
+        pulses.splice(i, 1);
+        continue;
+      }
+      const a = pos[p.e.a], b = pos[p.e.b];
+      const pt = qpoint(a, b, p.t);
+      const fade = Math.sin(p.t * Math.PI);
+      const col = COLORS[bin(DATA.nodes[p.e.a].age)];
+      const grad = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 11);
+      grad.addColorStop(0, `rgba(255,255,255,${0.95 * fade})`);
+      grad.addColorStop(0.35, `rgba(${col[0]},${col[1]},${col[2]},${0.6 * fade})`);
+      grad.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 11, 0, 7); ctx.fill();
+    }
+    for (let i = flashes.length - 1; i >= 0; i--) {
+      const f = flashes[i];
+      f.t += 1.7 * dt; // ring expands over ~0.6s regardless of refresh rate
+      if (f.t >= 1) { flashes.splice(i, 1); continue; }
+      ctx.strokeStyle = `rgba(240,253,250,${0.8 * (1 - f.t)})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 3 + f.t * 20, 0, 7); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // hover / pinned ring
+  const hl = pinnedId ?? hoverId;
+  if (hl !== null && hl !== undefined) {
+    const p = pos[hl];
+    ctx.strokeStyle = "rgba(34,211,238,.9)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, 7); ctx.stroke();
+  }
+  requestAnimationFrame(draw);
+}
+
+// ---- chips ------------------------------------------------------------------
+function placeChips() {
+  const box = document.getElementById("chips");
+  box.innerHTML = "";
+  DATA.layers.forEach((L, li) => {
+    const div = document.createElement("div");
+    div.className = "chip" + (isolated === li ? " active" : "");
+    div.style.left = L.x + "px";
+    div.style.top = (li % 2 ? 82 : 40) + "px";
+    div.innerHTML = `<b>${L.title}</b> <span class="n">· ${byLayer[li].length}</span><br>` +
+      `<span class="n">${L.sub}</span><br>` +
+      `<span class="fn">fn: ${L.fn} (click)</span>`;
+    div.onclick = () => {
+      isolated = isolated === li ? null : li;
+      renderBase(); placeChips();
+    };
+    box.appendChild(div);
+  });
+}
+
+// ---- tooltip ----------------------------------------------------------------
+let hoverId = null;
+const tip = document.getElementById("tooltip");
+
+function nearest(mx, my) {
+  let best = null, bd = 121; // 11px radius
+  for (const n of DATA.nodes) {
+    const p = pos[n.id];
+    const d = (p.x - mx) ** 2 + (p.y - my) ** 2;
+    if (d < bd) { bd = d; best = n.id; }
+  }
+  return best;
+}
+
+function showTip(id, pageX, pageY, pinned) {
+  const n = DATA.nodes[id];
+  const b = bin(n.age);
+  const binColor = { fresh: "#16a34a", aging: "#d97706", stale: "#dc2626" }[b];
+  tip.innerHTML =
+    `<div class="t-label">${esc(n.label)}</div>` +
+    `<div class="t-sub">${DATA.layers[n.layer].title} · ${DATA.layers[n.layer].sub}</div>` +
+    (n.desc ? `<div class="t-row">${esc(n.desc)}</div>` : "") +
+    `<div class="t-row">${n.date} · ${n.age}d old ` +
+    `<span class="bin" style="background:${binColor}">${b}</span>` +
+    ` · ${degree[id]} connection${degree[id] === 1 ? "" : "s"}</div>` +
+    `<div class="t-path">${esc(n.path)}</div>`;
+  tip.style.display = "block";
+  tip.classList.toggle("pinned", !!pinned);
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(pageX + 16, W - r.width - 12) + "px";
+  tip.style.top = Math.min(pageY + 14, H - r.height - 12) + "px";
+}
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+canvas.addEventListener("mousemove", ev => {
+  hoverId = nearest(ev.clientX, ev.clientY);
+  if (pinnedId !== null) return;
+  if (hoverId !== null) showTip(hoverId, ev.clientX, ev.clientY, false);
+  else tip.style.display = "none";
+});
+canvas.addEventListener("click", ev => {
+  const id = nearest(ev.clientX, ev.clientY);
+  if (id !== null) { pinnedId = id; showTip(id, ev.clientX, ev.clientY, true); }
+  else { pinnedId = null; tip.style.display = "none"; }
+});
+
+// ---- header / footer / table --------------------------------------------------
+document.getElementById("hdrmeta").innerHTML =
+  `${DATA.nodes.length.toLocaleString()} neurons · ${DATA.edges.length.toLocaleString()} synapses<br>` +
+  `generated ${DATA.generated}`;
+document.getElementById("ftnote").innerHTML =
+  `${DATA.excluded_note}<br>regen: python _scripts/brain_viz.py`;
+
+(function buildTable() {
+  const kinds = {};
+  DATA.edges.forEach(e => kinds[e.k] = (kinds[e.k] || 0) + 1);
+  let h = "<table><tr><th>layer</th><th>role</th><th>neurons</th></tr>";
+  DATA.layers.forEach((L, li) =>
+    h += `<tr><td>${L.title}</td><td>${L.sub}</td><td>${byLayer[li].length}</td></tr>`);
+  h += "</table><br><table><tr><th>edge kind</th><th>count</th></tr>";
+  Object.entries(kinds).sort((x, y) => y[1] - x[1]).forEach(([k, c]) =>
+    h += `<tr><td>${k}</td><td>${c}</td></tr>`);
+  h += "</table>";
+  document.getElementById("tablepanel").innerHTML = h;
+})();
+
+const firebtn = document.getElementById("firebtn");
+firebtn.onclick = () => {
+  firing = !firing;
+  if (!firing) { pulses.length = 0; flashes.length = 0; }
+  firebtn.innerHTML = "&#9889; firing: " + (firing ? "on" : "off");
+  firebtn.classList.toggle("off", !firing);
+};
+
+let rt;
+window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(layout, 150); });
+layout();
+</script>
+</body>
+</html>
