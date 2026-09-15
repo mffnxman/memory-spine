@@ -28,6 +28,8 @@ The layout follows the CoALA framing of agent memory, mapped to files:
 
 ## How a session flows
 
+![memory-spine: Claude Code hooks over plain markdown memories, derived sqlite indexes, background lanes, and the retrieval stack](docs/architecture.svg)
+
 1. **SessionStart** — `boot_ritual.py` prints the latest epilogue, the spine
    memories, open threads, and any health warnings into context.
    `observer_session_start.py` rotates the observer session id.
@@ -67,8 +69,8 @@ it first. It is narrative continuity, and it turned out to matter more for
 `search_hybrid` fuses several retrievers with Reciprocal Rank Fusion (k=60):
 
 - **TF-IDF** — lexical match for rare terms, ids, and codes.
-- **Vector search** — `BAAI/bge-small-en-v1.5` via fastembed, with a cosine
-  floor so weak matches are never injected.
+- **Vector search** — `BAAI/bge-small-en-v1.5` via fastembed, brute-force
+  cosine over the stored vectors.
 - **Knowledge graph + Personalized PageRank** — entities and relationships
   extracted from memories; query entities seed a PPR walk (α=0.15, 30
   iterations, edge weight = confidence × recency decay) whose scores join
@@ -78,10 +80,13 @@ it first. It is narrative continuity, and it turned out to matter more for
   fused candidates; a rerank floor is the only stage that can tell a noise
   query from a real one.
 
-Two multipliers apply everywhere: memory weight (`high` 1.3×, `medium` 1.1×,
-`low` 0.9×) and recency (access frequency over 30 days up to 1.5×, times a
-180-day half-life decay with a 0.7 floor). Hebbian reinforcement bumps
-memories that keep getting recalled together; bitemporal frontmatter
+Two multipliers shape the TF-IDF and vector rankings: memory weight (`high`
+1.3×, `medium` 1.1×, `low` 0.9×) and recency (access frequency over 30 days
+up to 1.5×, times an `exp(-age/180 days)` decay with a 0.7 floor). Hebbian
+co-recall joins the fusion as its own ranking, so memories that keep getting
+recalled together pull each other in; a filename match adds one top-rank
+vote. Prefetch injects at most three hits that clear an RRF floor of 0.012.
+Bitemporal frontmatter
 (`created` vs `event_date`) lets the engine reason about "was X then, is Y
 now". Adding the reranker took the continuity regression from 83% to 91%
 pass rate and MRR from 0.688 to 0.891; the full v3.2 stack ended at 93% and
